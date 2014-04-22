@@ -1,7 +1,7 @@
 ### install
     make
 ### examples
-    42> crawler:parse("http://nox73.ru", 30). 
+    242> crawler:parse("http://nox73.ru", 30). 
     <0.21210.1>
     243> flush().                             
     Shell got {"http://nox73.ru",200,"OK"}
