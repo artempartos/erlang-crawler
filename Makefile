@@ -8,11 +8,11 @@ clean:
 compile:
 	$(REBAR) compile
 
-run: cleanapp compileapp
-	erl -pa ebin deps/*/ebin -s crawler
+test: compileapp
+	ERL_FLAGS="-config $(CURDIR)/sys" $(REBAR) eu skip_deps=true
 
-test:
-	$(REBAR) compile eunit skip_deps=true
+run: cleanapp compileapp
+	erl -config $(CURDIR)/sys -pa ebin deps/*/ebin -s crawler
  
 get-deps:
 	$(REBAR) get-deps
