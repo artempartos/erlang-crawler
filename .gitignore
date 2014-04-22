@@ -2,4 +2,5 @@
 .*.swp
 *~
 /deps
+/ebin
 
