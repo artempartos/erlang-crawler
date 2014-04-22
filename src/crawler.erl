@@ -7,69 +7,49 @@ start() ->
 parse(Link, Limit) -> 
     inets:start(),
     Set = sets:new(),
-    Pid = spawn_link(?MODULE, parse, [self(), [Link], Set, Limit]),
-    process_flag(trap_exit, true),
-    wait(Pid).
+    spawn_link(?MODULE, parse, [self(), [Link], Set, Limit]).
 
-wait(Pid) ->
-    receive
-        {'EXIT', Pid, Reason} ->
-            io:format("Parser die with reason: \e[1;31m ~s\e[0;37m~n", [Reason]);
-        {Link, 404, ReasonPhrase} ->
-            io:format("~s - \e[1;31m 404 ~s\e[0;37m~n", [Link, ReasonPhrase]),
-            wait(Pid);
-        {Link, Status, ReasonPhrase} ->
-            io:format("~s - \e[1;32m ~p ~s\e[0;37m~n", [Link, Status, ReasonPhrase]),
-            wait(Pid)
-    end.
-
-parse(_, _, _, 0) -> exit("limit is over");
-parse(_, [], _, _) -> exit("game over");
+parse(Pid, _, _, 0) -> Pid ! limitover;
+parse(Pid, [], _, _) -> Pid ! gameover;
 parse(Pid, [Link | T], Set, Limit) ->
-    % erlang:display(Link),
     case sets:is_element(Link, Set) of 
         true ->
             parse(Pid, T, Set, Limit);
         false ->            
-            case httpc:request(Link) of 
-                {ok, {{_Version, 200, ReasonPhrase}, _Headers, Body}} -> 
-                    ProcessSet = sets:add_element(Link, Set),
-                    case http_uri:parse(Link) of
-                        {ok,{http,[],Domen ,_Port,_Rel,[]}} ->
-                            Links = extract_links(Domen, Body),
-                            Pid ! {Link, 200, ReasonPhrase},
-                            parse(Pid, Links ++ T, ProcessSet, Limit - 1);
-                        _Other ->
-                            % erlang:display(Other),
-                            ProcessSet = sets:add_element(Link, Set),
-                            parse(Pid, T, ProcessSet, Limit - 1)
-                    end;
-                {ok, {{_Version, Code, ReasonPhrase}, _Headers, _Body}} ->
-                    Pid ! {Link, Code, ReasonPhrase},
-                    ProcessSet = sets:add_element(Link, Set),
-                    parse(Pid, T, ProcessSet, Limit - 1);
-                _Other ->
-                    % erlang:display(Other),
-                    ProcessSet = sets:add_element(Link, Set),
-                    parse(Pid, T, ProcessSet, Limit - 1)
-            end
+            NewLinks = process_link(Pid, Link),
+            ProcessedSet = sets:add_element(Link, Set),
+            parse(Pid, T ++ NewLinks, ProcessedSet, Limit - 1)
     end.
     
-    
-extract_links(Domen,Body) -> 
-    RE = io_lib:format("href=\"(http://)?(/)?(www\.)?(~s)?/(?<href>.+?)\"", [Domen]),
+extract_links(Domain,Body) -> 
+    RE = io_lib:format("href=\"(http://)?(/)?(www\.)?(~s)?/(?<href>.+?)\"", [Domain]),
     FinalRE = lists:flatten(RE),
-    % erlang:display(FinalRE),
-
     case re:run(Body, FinalRE, [global, {capture, [href], list}]) of
         nomatch ->
             [];
         {match, Res} ->
-            % erlang:display(Res),
-            lists:map(fun(X) -> normalize(Domen, X) end, Res)
+            lists:map(fun(X) -> normalize(Domain, X) end, Res)
     end.
 
-normalize(Domen, Relative) ->
+normalize(Domain, Relative) ->
     DefaultScheme = "http://",
-    UrlIOList = io_lib:format("~s~s/~s", [DefaultScheme, Domen, Relative]),
+    UrlIOList = io_lib:format("~s~s/~s", [DefaultScheme, Domain, Relative]),
     lists:flatten(UrlIOList).
+
+process_link(Pid, Link) ->
+    case httpc:request(Link) of 
+        {ok, {{_Version, 200, ReasonPhrase}, _Headers, Body}} -> 
+            case http_uri:parse(Link) of
+                {ok,{http,[],Domain ,_Port,_Rel,[]}} ->
+                    Pid ! {Link, 200, ReasonPhrase},
+                    extract_links(Domain, Body);
+                _Other ->
+                    Pid ! {Link, badlink, _Other}
+            end;
+        {ok, {{_Version, Code, ReasonPhrase}, _Headers, _Body}} ->
+            Pid ! {Link, Code, ReasonPhrase},
+            [];
+        _Other ->
+            []
+    end.
+
