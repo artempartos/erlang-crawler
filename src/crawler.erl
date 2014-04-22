@@ -15,7 +15,7 @@ parse(Pid, [Link | T], Set, Limit) ->
     case sets:is_element(Link, Set) of 
         true ->
             parse(Pid, T, Set, Limit);
-        false ->            
+        false ->
             NewLinks = process_link(Pid, Link),
             ProcessedSet = sets:add_element(Link, Set),
             parse(Pid, T ++ NewLinks, ProcessedSet, Limit - 1)
@@ -28,7 +28,7 @@ extract_links(Domain,Body) ->
         nomatch ->
             [];
         {match, Res} ->
-            lists:map(fun(X) -> normalize(Domain, X) end, Res)
+            [normalize(Domain, Link) || Link <- Res ]
     end.
 
 normalize(Domain, Relative) ->
