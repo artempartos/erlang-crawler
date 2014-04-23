@@ -4,7 +4,7 @@
 start() ->
     {ok, _} = application:ensure_all_started(?MODULE).
 
-parse(Link, Limit) -> 
+parse(Link, Limit) ->
     inets:start(),
     Set = sets:new(),
     spawn_link(?MODULE, parse, [self(), [Link], Set, Limit]).
@@ -12,7 +12,7 @@ parse(Link, Limit) ->
 parse(Pid, _, _, 0) -> Pid ! limitover;
 parse(Pid, [], _, _) -> Pid ! gameover;
 parse(Pid, [Link | T], Set, Limit) ->
-    case sets:is_element(Link, Set) of 
+    case sets:is_element(Link, Set) of
         true ->
             parse(Pid, T, Set, Limit);
         false ->
@@ -20,8 +20,8 @@ parse(Pid, [Link | T], Set, Limit) ->
             ProcessedSet = sets:add_element(Link, Set),
             parse(Pid, T ++ NewLinks, ProcessedSet, Limit - 1)
     end.
-    
-extract_links(Domain,Body) -> 
+
+extract_links(Domain,Body) ->
     RE = io_lib:format("href=\"(http://)?(/)?(www\.)?(~s)?/(?<href>.+?)\"", [Domain]),
     FinalRE = lists:flatten(RE),
     case re:run(Body, FinalRE, [global, {capture, [href], list}]) of
@@ -37,8 +37,8 @@ normalize(Domain, Relative) ->
     lists:flatten(UrlIOList).
 
 process_link(Pid, Link) ->
-    case httpc:request(Link) of 
-        {ok, {{_Version, 200, ReasonPhrase}, _Headers, Body}} -> 
+    case httpc:request(Link) of
+        {ok, {{_Version, 200, ReasonPhrase}, _Headers, Body}} ->
             case http_uri:parse(Link) of
                 {ok,{http,[],Domain ,_Port,_Rel,[]}} ->
                     Pid ! {Link, 200, ReasonPhrase},
