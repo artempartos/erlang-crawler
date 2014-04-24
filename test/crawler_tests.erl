@@ -30,4 +30,3 @@ Links = crawler:extract_links("nox73.ru" , Body),
 ?assertEqual(ExpLinks,Links).
 
 
-    
