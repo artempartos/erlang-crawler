@@ -7,7 +7,11 @@
                   kernel,
                   stdlib,
                   sasl,
+                  ibrowse,
                   sync
                  ]},
-  {env, []}
+  {mod, { crawler_app, []}},
+  {env, [
+    {workers, 20}
+  ]}
  ]}.
