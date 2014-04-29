@@ -13,7 +13,7 @@ test: compileapp
 
 run: cleanapp compileapp
 	erl -config $(CURDIR)/sys -pa ebin deps/*/ebin -s crawler
- 
+
 get-deps:
 	$(REBAR) get-deps
 
@@ -21,6 +21,6 @@ cleanapp:
 	$(REBAR) clean skip_deps=true
 
 compileapp:
-	$(REBAR) compile skip_deps=true	
+	$(REBAR) compile skip_deps=true
 
 .PHONY: test
