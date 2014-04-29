@@ -27,7 +27,7 @@ handle_info({processed, Link, "404"}, State)  ->
     {noreply, State};
 
 handle_info({processed, Link, badlink}, State)  ->
-    io:format("~s - \e[1;31m 404 \e[0;37m~n", [Link]),
+    io:format("~s - \e[1;31m badlink \e[0;37m~n", [Link]),
     {noreply, State};
 
 handle_info({processed, Link, Status}, State)  ->
@@ -35,7 +35,7 @@ handle_info({processed, Link, Status}, State)  ->
     {noreply, State};
 
 handle_info({links, Links}, State)  ->
-    [parse(Link) || Link <- Links, false == sets:is_element(Link, State)],
+    [parse(Link) || Link <- Links, not sets:is_element(Link, State)],
     NewState = add_elements(Links, State),
     {noreply, NewState};
 

@@ -13,7 +13,7 @@ start_link(Concurrency) ->
 init(Concurrency) ->
   process_flag(trap_exit, true),
   Dict = dict:new(),
-  {ok, {Dict, Concurrency}}.
+  {ok, {Dict, Concurrency, []}}.
 
 process_link(Pid, Link) ->
     gen_server:cast(crawler_worker, {process, Link, Pid}).
@@ -22,47 +22,53 @@ handle_call(_Request, _From, State) ->
   {noreply, State}.
 
 handle_cast({process, Link, From}, State)  ->
-    {Dict , Concurrency } = State,
-    % erlang:display(Concurrency),
-    case ibrowse:send_req(Link, [], get, [], [{stream_to, self()}]) of
-        {ibrowse_req_id, RequestID} ->
-            Value = { From, Link, "", [] },
-            NewDict = dict:append(RequestID, Value, Dict),
-            NewState = {NewDict , Concurrency-1},
+    {Dict , Concurrency, Queue } = State,
+    % erlang:display(Queue),
+    case Concurrency of
+        0 ->
+            NewState = {Dict , Concurrency, [Link | Queue]},
             {noreply, NewState};
-        {error, Error} ->
-            erlang:display(Error),
-            {noreply, State}
+        Other ->
+            case ibrowse:send_req(Link, [], get, [], [{stream_to, self()}]) of
+                {ibrowse_req_id, RequestID} ->
+                    Value = { From, Link, "", [] },
+                    NewDict = dict:append(RequestID, Value, Dict),
+                    NewState = {NewDict , Concurrency-1, Queue},
+                    {noreply, NewState};
+                {error, Error} ->
+                    erlang:display(Error),
+                    {noreply, State}
+            end
     end;
+
 
 handle_cast(Other, State)  ->
     erlang:display(Other),
     {noreply, State}.
 
 handle_info({ibrowse_async_headers, RequestID, Status, _Headers}, State)  ->
-    {Dict , Concurrency } = State,
+    {Dict , Concurrency, Queue} = State,
     [ { From, Link, _, _ } | T ] = dict:fetch(RequestID, Dict),
     DelDict = dict:erase(RequestID, Dict),
     Value = { From, Link, Status, [] },
     NewDict = dict:append(RequestID, Value, DelDict),
-    NewState = {NewDict , Concurrency},
+    NewState = {NewDict , Concurrency, Queue},
     {noreply, NewState};
 
 handle_info({ibrowse_async_response, RequestID, Body}, State)  ->
-    {Dict , Concurrency } = State,
+    {Dict , Concurrency, Queue} = State,
     [ { From, Link, Status, _ } | T ] = dict:fetch(RequestID, Dict),
     DelDict = dict:erase(RequestID, Dict),
     Value = { From, Link, Status, Body },
     NewDict = dict:append(RequestID, Value, DelDict),
-    NewState = {NewDict , Concurrency},
+    NewState = {NewDict , Concurrency, Queue},
     {noreply, NewState};
 
 handle_info({ibrowse_async_response_end, RequestID}, State)  ->
-    {Dict , Concurrency } = State,
-    % erlang:display(Dict),
+    {Dict , Concurrency, Queue } = State,
+    % erlang:display(Concurrency + 1),
     [ { From, Link, Status, Body } | T ] = dict:fetch(RequestID, Dict),
     DelDict = dict:erase(RequestID, Dict),
-    NewState = {DelDict , Concurrency + 1},
 
     case http_uri:parse(Link) of
         {ok,{http,[],Domain ,_Port,_Rel,[]}} ->
@@ -70,11 +76,18 @@ handle_info({ibrowse_async_response_end, RequestID}, State)  ->
             Links = extract_links(Domain, Body),
             From ! {links, Links};
         _Other ->
-            erlang:display("Bad link"),
-            []
+            From ! {processed, Link, badlink}
     end,
 
-    % erlang:display(Links),
+    case erlang:length(Queue) of
+        0 ->
+            NewState = {DelDict , Concurrency + 1, Queue};
+        Other ->
+            [LinkHead | NewQueue] = Queue,
+            NewState = {DelDict , Concurrency + 1, NewQueue},
+            process_link(From, LinkHead)
+    end,
+
     {noreply, NewState};
 
 handle_info(Msg, State)  ->
